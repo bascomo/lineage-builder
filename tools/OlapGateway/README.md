@@ -13,7 +13,7 @@ HTTP proxy for SSAS Multidimensional servers. Deploy on IIS alongside SQL gatewa
 
 ## API
 
-All requests: `POST https://server/gateway/olap-gateway.ashx`
+All requests: `POST https://ibmcognos-test.mhpost.ru/olap-gateway/olap-gateway.ashx`
 Header: `X-Api-Key: <HMAC-SHA256 TOTP token>` (same secret as SQL gateway)
 
 ### Actions
