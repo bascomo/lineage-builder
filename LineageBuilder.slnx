@@ -13,5 +13,6 @@
   <Folder Name="/tools/">
     <Project Path="tools/LineageBuilder.TestHarness/LineageBuilder.TestHarness.csproj" />
     <Project Path="tools/OlapProxy/OlapProxy.csproj" />
+    <Project Path="tools/OlapWorker/OlapWorker.csproj" />
   </Folder>
 </Solution>
