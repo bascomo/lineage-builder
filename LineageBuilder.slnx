@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LineageBuilder.Api/LineageBuilder.Api.csproj" />
+    <Project Path="src/LineageBuilder.Core/LineageBuilder.Core.csproj" />
+    <Project Path="src/LineageBuilder.Extractors/LineageBuilder.Extractors.csproj" />
+    <Project Path="src/LineageBuilder.Persistence/LineageBuilder.Persistence.csproj" />
+    <Project Path="src/LineageBuilder.SqlParser/LineageBuilder.SqlParser.csproj" />
+    <Project Path="src/LineageBuilder.Worker/LineageBuilder.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LineageBuilder.Tests/LineageBuilder.Tests.csproj" />
+  </Folder>
+</Solution>

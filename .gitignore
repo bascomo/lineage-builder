@@ -1,0 +1,36 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+
+## NuGet
+*.nupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+
+## VS
+.vs/
+*.csproj.user
+
+## Rider
+.idea/
+
+## OS
+Thumbs.db
+.DS_Store
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]uild[Ll]og.*
+
+## Test results
+[Tt]est[Rr]esult*/
+[Bb]uild[Rr]esults/
+TestResults/
