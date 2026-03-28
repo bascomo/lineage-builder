@@ -322,4 +322,261 @@ public class TsqlLineageParserTests
         Assert.Contains(result.Entries, e =>
             e.TargetColumn == "Total" && e.SourceTable == "dbo.Orders" && e.SourceColumn == "Amount");
     }
+
+    // ==================== Test 16: UPDATE ... SET ... FROM ... JOIN ====================
+    [Fact]
+    public void UpdateFromJoin_ExtractsLineage()
+    {
+        var sql = @"
+            UPDATE t
+            SET t.Status = s.NewStatus,
+                t.ModifiedDate = GETDATE()
+            FROM dbo.Orders t
+            INNER JOIN dbo.StatusUpdates s ON t.OrderId = s.OrderId";
+
+        var result = _parser.Parse(sql);
+
+        Assert.False(result.HasErrors);
+        Assert.Contains(result.Entries, e =>
+            e.TargetTable == "t" && e.TargetColumn == "Status" &&
+            e.SourceTable == "dbo.StatusUpdates" && e.SourceColumn == "NewStatus");
+    }
+
+    // ==================== Test 17: MERGE statement ====================
+    [Fact]
+    public void MergeStatement_ExtractsLineageFromBothActions()
+    {
+        var sql = @"
+            MERGE INTO dbo.TargetTable AS tgt
+            USING dbo.SourceTable AS src ON tgt.Id = src.Id
+            WHEN MATCHED THEN
+                UPDATE SET tgt.Name = src.Name, tgt.Amount = src.Amount
+            WHEN NOT MATCHED THEN
+                INSERT (Id, Name, Amount) VALUES (src.Id, src.Name, src.Amount);";
+
+        var result = _parser.Parse(sql);
+
+        Assert.False(result.HasErrors);
+        // UPDATE part
+        Assert.Contains(result.Entries, e =>
+            e.TargetTable == "dbo.TargetTable" && e.TargetColumn == "Name" &&
+            e.SourceColumn == "Name");
+        // INSERT part
+        Assert.Contains(result.Entries, e =>
+            e.TargetTable == "dbo.TargetTable" && e.TargetColumn == "Id" &&
+            e.SourceColumn == "Id");
+    }
+
+    // ==================== Test 18: CREATE PROCEDURE with INSERT...SELECT ====================
+    [Fact]
+    public void CreateProcedure_ExtractsLineageFromBody()
+    {
+        var sql = @"
+            CREATE PROCEDURE dbo.sp_ArchiveOrders
+            AS
+            BEGIN
+                INSERT INTO dbo.OrderArchive (OrderId, Amount)
+                SELECT OrderId, Amount
+                FROM dbo.Orders
+                WHERE OrderDate < '2020-01-01'
+            END";
+
+        var result = _parser.Parse(sql);
+
+        Assert.False(result.HasErrors);
+        Assert.Contains(result.Entries, e =>
+            e.TargetTable == "dbo.OrderArchive" && e.TargetColumn == "OrderId" &&
+            e.SourceTable == "dbo.Orders" && e.SourceColumn == "OrderId");
+    }
+
+    // ==================== Test 19: Procedure with IF branches ====================
+    [Fact]
+    public void ProcedureWithIf_ExtractsFromBothBranches()
+    {
+        var sql = @"
+            CREATE PROCEDURE dbo.sp_Conditional
+            AS
+            BEGIN
+                IF 1 = 1
+                BEGIN
+                    INSERT INTO dbo.Target1 (Col1) SELECT SourceCol1 FROM dbo.Source1
+                END
+                ELSE
+                BEGIN
+                    INSERT INTO dbo.Target2 (Col2) SELECT SourceCol2 FROM dbo.Source2
+                END
+            END";
+
+        var result = _parser.Parse(sql);
+
+        Assert.False(result.HasErrors);
+        Assert.Contains(result.Entries, e =>
+            e.TargetTable == "dbo.Target1" && e.SourceTable == "dbo.Source1");
+        Assert.Contains(result.Entries, e =>
+            e.TargetTable == "dbo.Target2" && e.SourceTable == "dbo.Source2");
+    }
+
+    // ==================== Test 20: Window function ROW_NUMBER ====================
+    [Fact]
+    public void WindowFunction_ExtractsPartitionAndOrderColumns()
+    {
+        var sql = @"
+            SELECT OrderId,
+                ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY OrderDate DESC) AS RowNum
+            FROM dbo.Orders";
+
+        var result = _parser.Parse(sql);
+
+        Assert.False(result.HasErrors);
+        var rowNumSources = result.Entries
+            .Where(e => e.TargetColumn == "RowNum")
+            .Select(e => e.SourceColumn)
+            .ToList();
+        Assert.Contains("CustomerId", rowNumSources);
+        Assert.Contains("OrderDate", rowNumSources);
+    }
+
+    // ==================== Test 21: View with CTE ====================
+    [Fact]
+    public void ViewWithCte_TracesCorrectly()
+    {
+        var sql = @"
+            CREATE VIEW dbo.vw_TopCustomers AS
+            WITH CustomerTotals AS (
+                SELECT CustomerId, SUM(Amount) AS TotalSpent
+                FROM dbo.Orders
+                GROUP BY CustomerId
+            )
+            SELECT c.CustomerName, ct.TotalSpent
+            FROM dbo.Customers c
+            JOIN CustomerTotals ct ON c.CustomerId = ct.CustomerId
+            WHERE ct.TotalSpent > 1000";
+
+        var result = _parser.Parse(sql);
+
+        Assert.False(result.HasErrors);
+        Assert.Contains(result.Entries, e =>
+            e.TargetTable == "dbo.vw_TopCustomers" && e.TargetColumn == "TotalSpent" &&
+            e.SourceTable == "dbo.Orders" && e.SourceColumn == "Amount");
+        Assert.Contains(result.Entries, e =>
+            e.TargetTable == "dbo.vw_TopCustomers" && e.TargetColumn == "CustomerName" &&
+            e.SourceTable == "dbo.Customers");
+    }
+
+    // ==================== Test 22: LEFT JOIN ====================
+    [Fact]
+    public void LeftJoin_ExtractsColumnsFromBothSides()
+    {
+        var sql = @"
+            SELECT o.OrderId, o.Amount, ISNULL(d.DiscountPct, 0) AS Discount
+            FROM dbo.Orders o
+            LEFT JOIN dbo.Discounts d ON o.DiscountId = d.DiscountId";
+
+        var result = _parser.Parse(sql);
+
+        Assert.False(result.HasErrors);
+        Assert.Contains(result.Entries, e =>
+            e.TargetColumn == "Discount" && e.SourceColumn == "DiscountPct" &&
+            e.SourceTable == "dbo.Discounts");
+    }
+
+    // ==================== Test 23: Multiple JOINs ====================
+    [Fact]
+    public void MultipleJoins_ResolvesAllTables()
+    {
+        var sql = @"
+            SELECT o.OrderId, c.CustomerName, p.ProductName, ol.Quantity
+            FROM dbo.Orders o
+            JOIN dbo.Customers c ON o.CustomerId = c.CustomerId
+            JOIN dbo.OrderLines ol ON o.OrderId = ol.OrderId
+            JOIN dbo.Products p ON ol.ProductId = p.ProductId";
+
+        var result = _parser.Parse(sql);
+
+        Assert.False(result.HasErrors);
+        Assert.Contains(result.Entries, e =>
+            e.SourceTable == "dbo.Orders" && e.SourceColumn == "OrderId");
+        Assert.Contains(result.Entries, e =>
+            e.SourceTable == "dbo.Customers" && e.SourceColumn == "CustomerName");
+        Assert.Contains(result.Entries, e =>
+            e.SourceTable == "dbo.Products" && e.SourceColumn == "ProductName");
+        Assert.Contains(result.Entries, e =>
+            e.SourceTable == "dbo.OrderLines" && e.SourceColumn == "Quantity");
+    }
+
+    // ==================== Test 24: IIF function ====================
+    [Fact]
+    public void IifFunction_ExtractsAllBranches()
+    {
+        var sql = @"
+            SELECT OrderId,
+                IIF(Amount > 100, HighRate, LowRate) AS AppliedRate
+            FROM dbo.Orders";
+
+        var result = _parser.Parse(sql);
+
+        Assert.False(result.HasErrors);
+        var sources = result.Entries
+            .Where(e => e.TargetColumn == "AppliedRate")
+            .Select(e => e.SourceColumn)
+            .ToList();
+        Assert.Contains("Amount", sources);
+        Assert.Contains("HighRate", sources);
+        Assert.Contains("LowRate", sources);
+    }
+
+    // ==================== Test 25: Simple CASE ====================
+    [Fact]
+    public void SimpleCase_ExtractsInputAndBranches()
+    {
+        var sql = @"
+            SELECT OrderId,
+                CASE Status
+                    WHEN 1 THEN Amount
+                    WHEN 2 THEN Amount * 0.5
+                    ELSE 0
+                END AS AdjustedAmount
+            FROM dbo.Orders";
+
+        var result = _parser.Parse(sql);
+
+        Assert.False(result.HasErrors);
+        var sources = result.Entries
+            .Where(e => e.TargetColumn == "AdjustedAmount")
+            .Select(e => e.SourceColumn)
+            .ToList();
+        Assert.Contains("Status", sources);
+        Assert.Contains("Amount", sources);
+    }
+
+    // ==================== Test 26: NullIf ====================
+    [Fact]
+    public void NullIf_ExtractsBothArgs()
+    {
+        var sql = @"
+            SELECT OrderId, NULLIF(Amount, 0) AS NonZeroAmount
+            FROM dbo.Orders";
+
+        var result = _parser.Parse(sql);
+
+        Assert.False(result.HasErrors);
+        Assert.Contains(result.Entries, e =>
+            e.TargetColumn == "NonZeroAmount" && e.SourceColumn == "Amount");
+    }
+
+    // ==================== Test 27: Scalar subquery in SELECT ====================
+    [Fact]
+    public void ScalarSubquery_ExtractsInnerSources()
+    {
+        var sql = @"
+            SELECT o.OrderId,
+                (SELECT MAX(p.Price) FROM dbo.Products p WHERE p.ProductId = o.ProductId) AS MaxPrice
+            FROM dbo.Orders o";
+
+        var result = _parser.Parse(sql);
+
+        Assert.False(result.HasErrors);
+        Assert.Contains(result.Entries, e =>
+            e.TargetColumn == "MaxPrice" && e.SourceColumn == "Price" && e.SourceTable == "dbo.Products");
+    }
 }

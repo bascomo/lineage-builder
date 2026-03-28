@@ -174,7 +174,7 @@ public class ColumnLineageVisitor : TSqlFragmentVisitor
 
     // ==================== Table Reference Processing ====================
 
-    private void ProcessTableReference(TableReference tableRef, QueryContext ctx)
+    internal void ProcessTableReference(TableReference tableRef, QueryContext ctx)
     {
         switch (tableRef)
         {
@@ -368,6 +368,12 @@ public class ColumnLineageVisitor : TSqlFragmentVisitor
     }
 
     // ==================== Expression Analysis ====================
+
+    /// <summary>
+    /// Public accessor for ExtractColumnRefs, used by TsqlLineageParser for MERGE/UPDATE.
+    /// </summary>
+    internal List<ColumnRef> ExtractColumnRefsPublic(ScalarExpression? expr, QueryContext ctx) =>
+        ExtractColumnRefs(expr, ctx);
 
     private List<ColumnRef> ExtractColumnRefs(ScalarExpression? expr, QueryContext ctx)
     {
