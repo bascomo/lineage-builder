@@ -62,6 +62,14 @@ logger.LogInformation("Started run {RunId}", runId);
 
 try
 {
+    // SSAS servers
+    var ssasServers = configuration.GetSection("Ssas:Servers").Get<string[]>()
+        ?? new[] { "OLAP-VDI", "OLAP2-VDI", "OLAP3-VDI", "OPD-VDI" };
+
+    // TFS client for SSIS packages
+    using var tfsClient = new TfsClient(tfsUrl,
+        sp.GetRequiredService<ILogger<TfsClient>>());
+
     // Build extractors list
     var extractors = new List<IMetadataExtractor>
     {
@@ -71,6 +79,10 @@ try
             sp.GetRequiredService<ILogger<SqlServerExtractor>>()),
         new SqlAgentJobExtractor(metaMartConn,
             sp.GetRequiredService<ILogger<SqlAgentJobExtractor>>()),
+        new SsasExtractor(ssasServers, sqlParser,
+            sp.GetRequiredService<ILogger<SsasExtractor>>()),
+        new SsisPackageExtractor(tfsClient, tfsSSISPath, sqlParser,
+            sp.GetRequiredService<ILogger<SsisPackageExtractor>>()),
     };
 
     // Run extractors
