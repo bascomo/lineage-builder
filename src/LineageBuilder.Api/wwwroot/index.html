@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>LineageBuilder - Data Lineage Explorer</title>
+    <script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+    <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+    <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; display: flex; height: 100vh; background: #1a1a2e; color: #e0e0e0; }
+
+        #sidebar {
+            width: 360px; background: #16213e; padding: 16px; display: flex;
+            flex-direction: column; gap: 12px; overflow-y: auto; border-right: 1px solid #0f3460;
+        }
+        h1 { font-size: 18px; color: #e94560; }
+        input, select {
+            width: 100%; padding: 8px 12px; border: 1px solid #0f3460;
+            background: #1a1a2e; color: #e0e0e0; border-radius: 4px; font-size: 14px;
+        }
+        input:focus, select:focus { outline: none; border-color: #e94560; }
+        .search-results { max-height: 300px; overflow-y: auto; }
+        .search-item {
+            padding: 8px; cursor: pointer; border-bottom: 1px solid #0f3460;
+            font-size: 13px; transition: background 0.2s;
+        }
+        .search-item:hover { background: #0f3460; }
+        .search-item .fqn { color: #888; font-size: 11px; display: block; margin-top: 2px; }
+        .search-item .type-badge {
+            display: inline-block; padding: 1px 6px; border-radius: 3px;
+            font-size: 10px; margin-right: 4px;
+        }
+
+        #detail-panel { display: none; background: #0f3460; border-radius: 6px; padding: 12px; font-size: 13px; }
+        #detail-panel h3 { color: #e94560; margin-bottom: 8px; font-size: 14px; }
+        #detail-panel .prop { margin: 4px 0; }
+        #detail-panel .prop-label { color: #888; }
+
+        .controls { display: flex; gap: 8px; }
+        .btn {
+            padding: 6px 14px; border: 1px solid #0f3460; background: #16213e;
+            color: #e0e0e0; border-radius: 4px; cursor: pointer; font-size: 12px;
+        }
+        .btn:hover { background: #0f3460; }
+        .btn.active { background: #e94560; border-color: #e94560; color: white; }
+
+        .legend { display: flex; flex-wrap: wrap; gap: 6px; }
+        .legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        #cy { flex: 1; }
+        #status { position: fixed; bottom: 10px; right: 10px; background: #16213e; padding: 6px 12px;
+            border-radius: 4px; font-size: 12px; color: #888; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h1>LineageBuilder</h1>
+
+        <input type="text" id="search" placeholder="Search nodes... (e.g. FactSales, Amount)" autocomplete="off">
+        <div class="search-results" id="searchResults"></div>
+
+        <div class="controls">
+            <button class="btn active" id="btnUpstream" onclick="setDirection('upstream')">Upstream</button>
+            <button class="btn" id="btnDownstream" onclick="setDirection('downstream')">Downstream</button>
+            <button class="btn" id="btnImpact" onclick="setDirection('impact')">Impact</button>
+        </div>
+
+        <label style="font-size:12px;">
+            Depth: <input type="range" id="depth" min="1" max="20" value="5" style="width:200px">
+            <span id="depthVal">5</span>
+        </label>
+
+        <div id="detail-panel">
+            <h3 id="detailName"></h3>
+            <div class="prop"><span class="prop-label">Type:</span> <span id="detailType"></span></div>
+            <div class="prop"><span class="prop-label">Layer:</span> <span id="detailLayer"></span></div>
+            <div class="prop"><span class="prop-label">FQN:</span> <span id="detailFqn" style="word-break:break-all;"></span></div>
+            <div class="prop"><span class="prop-label">Source:</span> <span id="detailSource"></span></div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#4ecdc4"></div> Source</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#45b7d1"></div> Staging</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f9ca24"></div> Core</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f0932b"></div> DataMart</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#e94560"></div> Cube</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#a29bfe"></div> Other</div>
+        </div>
+    </div>
+
+    <div id="cy"></div>
+    <div id="status">Ready</div>
+
+    <script>
+        const API = '/api/lineage';
+        let cy, direction = 'upstream', selectedNodeId = null;
+
+        // Color mapping
+        const layerColors = {
+            Source: '#4ecdc4', Staging: '#45b7d1', Core: '#f9ca24',
+            DataMart: '#f0932b', Cube: '#e94560', Report: '#ff6b6b'
+        };
+        const nodeShapes = {
+            Column: 'ellipse', Table: 'round-rectangle', View: 'diamond',
+            StoredProcedure: 'hexagon', SsisPackage: 'pentagon',
+            SqlAgentJob: 'star', SsasCube: 'octagon'
+        };
+
+        // Init Cytoscape
+        cy = cytoscape({
+            container: document.getElementById('cy'),
+            style: [
+                { selector: 'node', style: {
+                    'label': 'data(label)', 'text-valign': 'center', 'text-halign': 'center',
+                    'font-size': '10px', 'color': '#fff', 'text-outline-color': '#1a1a2e',
+                    'text-outline-width': 1, 'width': 30, 'height': 30,
+                    'background-color': ele => layerColors[ele.data('layer')] || '#a29bfe',
+                    'shape': ele => nodeShapes[ele.data('nodeType')] || 'ellipse',
+                    'border-width': 1, 'border-color': '#0f3460'
+                }},
+                { selector: 'edge', style: {
+                    'width': 1.5, 'line-color': '#555', 'target-arrow-color': '#555',
+                    'target-arrow-shape': 'triangle', 'curve-style': 'bezier',
+                    'arrow-scale': 0.8
+                }},
+                { selector: 'node:selected', style: {
+                    'border-width': 3, 'border-color': '#e94560', 'width': 40, 'height': 40
+                }},
+                { selector: '.upstream', style: { 'background-color': '#45b7d1', 'border-color': '#45b7d1' }},
+                { selector: '.downstream', style: { 'background-color': '#f0932b', 'border-color': '#f0932b' }},
+                { selector: '.highlight-edge', style: { 'line-color': '#e94560', 'width': 2.5, 'target-arrow-color': '#e94560' }},
+            ],
+            layout: { name: 'preset' },
+            minZoom: 0.1, maxZoom: 5
+        });
+
+        cy.on('tap', 'node', function(evt) {
+            const d = evt.target.data();
+            document.getElementById('detail-panel').style.display = 'block';
+            document.getElementById('detailName').textContent = d.label;
+            document.getElementById('detailType').textContent = d.nodeType;
+            document.getElementById('detailLayer').textContent = d.layer || '-';
+            document.getElementById('detailFqn').textContent = d.fqn;
+            document.getElementById('detailSource').textContent = d.sourceLocation || '-';
+        });
+
+        // Search
+        let searchTimeout;
+        document.getElementById('search').addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const q = this.value.trim();
+            if (q.length < 2) { document.getElementById('searchResults').innerHTML = ''; return; }
+            searchTimeout = setTimeout(() => searchNodes(q), 300);
+        });
+
+        async function searchNodes(q) {
+            const res = await fetch(`${API}/search?q=${encodeURIComponent(q)}&limit=30`);
+            const nodes = await res.json();
+            const html = nodes.map(n => `
+                <div class="search-item" onclick="loadLineage(${n.id}, '${n.displayName.replace(/'/g,"\\'")}')">
+                    <span class="type-badge" style="background:${layerColors[n.layer] || '#a29bfe'}44;color:${layerColors[n.layer] || '#a29bfe'}">${n.nodeType}</span>
+                    ${n.displayName}
+                    <span class="fqn">${n.fullyQualifiedName}</span>
+                </div>
+            `).join('');
+            document.getElementById('searchResults').innerHTML = html;
+        }
+
+        async function loadLineage(nodeId, name) {
+            selectedNodeId = nodeId;
+            const depth = document.getElementById('depth').value;
+            setStatus(`Loading ${direction} for ${name}...`);
+
+            const res = await fetch(`${API}/${direction}/${nodeId}?depth=${depth}`);
+            const data = await res.json();
+
+            cy.elements().remove();
+            const elements = [];
+
+            (data.elements.nodes || []).forEach(n => {
+                elements.push({ group: 'nodes', data: n.data });
+            });
+            (data.elements.edges || []).forEach(e => {
+                elements.push({ group: 'edges', data: e.data });
+            });
+
+            cy.add(elements);
+            cy.layout({
+                name: 'dagre',
+                rankDir: 'LR',
+                nodeSep: 40,
+                rankSep: 80,
+                animate: true,
+                animationDuration: 500
+            }).run();
+
+            setStatus(`${name}: ${data.elements.nodes?.length || 0} nodes, ${data.elements.edges?.length || 0} edges`);
+            document.getElementById('searchResults').innerHTML = '';
+        }
+
+        function setDirection(dir) {
+            direction = dir;
+            document.querySelectorAll('.controls .btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn' + dir.charAt(0).toUpperCase() + dir.slice(1)).classList.add('active');
+            if (selectedNodeId) loadLineage(selectedNodeId, '');
+        }
+
+        document.getElementById('depth').addEventListener('input', function() {
+            document.getElementById('depthVal').textContent = this.value;
+        });
+        document.getElementById('depth').addEventListener('change', function() {
+            if (selectedNodeId) loadLineage(selectedNodeId, '');
+        });
+
+        function setStatus(text) { document.getElementById('status').textContent = text; }
+    </script>
+</body>
+</html>
