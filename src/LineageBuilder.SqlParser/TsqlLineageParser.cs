@@ -106,7 +106,7 @@ public class TsqlLineageParser : ISqlLineageParser
                                 SourceColumn = src.ColumnName,
                                 TargetTable = "",
                                 TargetColumn = col.OutputName,
-                                EdgeType = col.IsAggregation ? EdgeType.Aggregation : EdgeType.DataFlow,
+                                EdgeType = col.IsAggregation ? EdgeTypes.Aggregation : EdgeTypes.DataFlow,
                                 TransformExpression = col.TransformExpression
                             });
                         }
@@ -286,7 +286,7 @@ public class TsqlLineageParser : ISqlLineageParser
                                 SourceColumn = src.ColumnName,
                                 TargetTable = targetName,
                                 TargetColumn = targetCol,
-                                EdgeType = EdgeType.DataFlow
+                                EdgeType = EdgeTypes.DataFlow
                             });
                         }
                     }
@@ -314,7 +314,7 @@ public class TsqlLineageParser : ISqlLineageParser
                                     SourceColumn = src.ColumnName,
                                     TargetTable = targetName,
                                     TargetColumn = insertCols[i],
-                                    EdgeType = EdgeType.DataFlow
+                                    EdgeType = EdgeTypes.DataFlow
                                 });
                             }
                         }
@@ -376,7 +376,7 @@ public class TsqlLineageParser : ISqlLineageParser
                         SourceColumn = src.ColumnName,
                         TargetTable = targetName,
                         TargetColumn = targetCol,
-                        EdgeType = EdgeType.DataFlow
+                        EdgeType = EdgeTypes.DataFlow
                     });
                 }
             }
@@ -398,7 +398,7 @@ public class TsqlLineageParser : ISqlLineageParser
                     SourceColumn = src.ColumnName,
                     TargetTable = targetTable,
                     TargetColumn = col.OutputName,
-                    EdgeType = col.IsAggregation ? EdgeType.Aggregation : EdgeType.DataFlow,
+                    EdgeType = col.IsAggregation ? EdgeTypes.Aggregation : EdgeTypes.DataFlow,
                     TransformExpression = col.TransformExpression
                 });
             }

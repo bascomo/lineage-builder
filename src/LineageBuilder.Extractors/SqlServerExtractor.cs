@@ -54,28 +54,23 @@ public class SqlServerExtractor : IMetadataExtractor
             if (cancellationToken.IsCancellationRequested) break;
 
             var objectFqn = $"{obj.ServerName}.{obj.DBName}.{obj.SchemaName}.{obj.ObjectName}";
-            var nodeType = obj.ObjectType switch
+            var (nodeTypeId, nodeTypeName) = obj.ObjectType switch
             {
-                "V" => NodeType.View,
-                "P" => NodeType.StoredProcedure,
-                "FN" or "IF" or "TF" => NodeType.TableFunction,
-                _ => NodeType.View
-            };
-            var mechanismType = obj.ObjectType switch
-            {
-                "V" => MechanismType.View,
-                "P" => MechanismType.StoredProcedure,
-                _ => MechanismType.TableFunction
+                "V" => (WellKnownNodeTypes.View, nameof(WellKnownNodeTypes.View)),
+                "P" => (WellKnownNodeTypes.StoredProcedure, nameof(WellKnownNodeTypes.StoredProcedure)),
+                "FN" or "IF" or "TF" => (WellKnownNodeTypes.TableFunction, nameof(WellKnownNodeTypes.TableFunction)),
+                _ => (WellKnownNodeTypes.View, nameof(WellKnownNodeTypes.View))
             };
 
-            // Add the object node itself
-            graph.AddNode(new LineageNode
+            // Add the object node itself (also serves as mechanism)
+            var mechanismNode = graph.AddNode(new LineageNode
             {
-                NodeType = nodeType,
+                NodeTypeId = nodeTypeId,
+                NodeTypeName = nodeTypeName,
                 FullyQualifiedName = objectFqn,
                 DisplayName = $"{obj.SchemaName}.{obj.ObjectName}",
                 SourceLocation = objectFqn,
-                Layer = DetectLayer(obj.DBName, obj.SchemaName),
+                LayerName = DetectLayer(obj.DBName, obj.SchemaName),
                 Metadata = new Dictionary<string, string>
                 {
                     ["server"] = obj.ServerName,
@@ -104,18 +99,20 @@ public class SqlServerExtractor : IMetadataExtractor
                     // Ensure source/target column nodes exist
                     var sourceNode = graph.AddNode(new LineageNode
                     {
-                        NodeType = NodeType.Column,
+                        NodeTypeId = WellKnownNodeTypes.Column,
+                        NodeTypeName = nameof(WellKnownNodeTypes.Column),
                         FullyQualifiedName = sourceColFqn,
                         DisplayName = entry.SourceColumn,
-                        Layer = DetectLayer(sourceTable)
+                        LayerName = DetectLayer(sourceTable)
                     });
 
                     var targetNode = graph.AddNode(new LineageNode
                     {
-                        NodeType = NodeType.Column,
+                        NodeTypeId = WellKnownNodeTypes.Column,
+                        NodeTypeName = nameof(WellKnownNodeTypes.Column),
                         FullyQualifiedName = targetColFqn,
                         DisplayName = entry.TargetColumn,
-                        Layer = DetectLayer(targetTable)
+                        LayerName = DetectLayer(targetTable)
                     });
 
                     graph.AddEdge(new LineageEdge
@@ -123,8 +120,7 @@ public class SqlServerExtractor : IMetadataExtractor
                         SourceNodeId = sourceNode.Id,
                         TargetNodeId = targetNode.Id,
                         EdgeType = entry.EdgeType,
-                        MechanismType = mechanismType,
-                        MechanismLocation = objectFqn,
+                        MechanismNodeId = mechanismNode.Id,
                         TransformExpression = entry.TransformExpression
                     });
                 }
@@ -164,7 +160,8 @@ public class SqlServerExtractor : IMetadataExtractor
             // Server node
             graph.AddNode(new LineageNode
             {
-                NodeType = NodeType.SqlServer,
+                NodeTypeId = WellKnownNodeTypes.SqlServer,
+                NodeTypeName = nameof(WellKnownNodeTypes.SqlServer),
                 FullyQualifiedName = server,
                 DisplayName = server
             });
@@ -172,7 +169,8 @@ public class SqlServerExtractor : IMetadataExtractor
             // Database node
             graph.AddNode(new LineageNode
             {
-                NodeType = NodeType.DatabaseRelational,
+                NodeTypeId = WellKnownNodeTypes.Database,
+                NodeTypeName = nameof(WellKnownNodeTypes.Database),
                 FullyQualifiedName = $"{server}.{db}",
                 DisplayName = db
             });
@@ -180,7 +178,8 @@ public class SqlServerExtractor : IMetadataExtractor
             // Schema node
             graph.AddNode(new LineageNode
             {
-                NodeType = NodeType.Schema,
+                NodeTypeId = WellKnownNodeTypes.Schema,
+                NodeTypeName = nameof(WellKnownNodeTypes.Schema),
                 FullyQualifiedName = $"{server}.{db}.{schema}",
                 DisplayName = schema
             });
@@ -188,10 +187,11 @@ public class SqlServerExtractor : IMetadataExtractor
             // Table node
             graph.AddNode(new LineageNode
             {
-                NodeType = NodeType.Table,
+                NodeTypeId = WellKnownNodeTypes.Table,
+                NodeTypeName = nameof(WellKnownNodeTypes.Table),
                 FullyQualifiedName = tableFqn,
                 DisplayName = $"{schema}.{table}",
-                Layer = DetectLayer(db, schema)
+                LayerName = DetectLayer(db, schema)
             });
         }
 
@@ -211,11 +211,11 @@ public class SqlServerExtractor : IMetadataExtractor
 
             graph.AddNode(new LineageNode
             {
-                NodeType = NodeType.Column,
+                NodeTypeId = WellKnownNodeTypes.Column,
+                NodeTypeName = nameof(WellKnownNodeTypes.Column),
                 FullyQualifiedName = $"{tableFqn}.{col}",
                 DisplayName = col,
-                ParentNodeId = tableNode?.Id,
-                Layer = DetectLayer(db, schema)
+                LayerName = DetectLayer(db, schema)
             });
         }
 
@@ -237,14 +237,14 @@ public class SqlServerExtractor : IMetadataExtractor
         };
     }
 
-    private static LayerName? DetectLayer(string dbOrFqn, string? schema = null)
+    private static string? DetectLayer(string dbOrFqn, string? schema = null)
     {
         var db = dbOrFqn.Split('.').Last().ToUpperInvariant();
         var sch = schema?.ToUpperInvariant() ?? "";
 
-        if (db.Contains("STAGING") || sch.StartsWith("S0")) return LayerName.Staging;
-        if (db.Contains("DATAMART") || db.Contains("MART")) return LayerName.DataMart;
-        if (db == "DWH" || db.Contains("CORE")) return LayerName.Core;
+        if (db.Contains("STAGING") || sch.StartsWith("S0")) return Layers.Staging;
+        if (db.Contains("DATAMART") || db.Contains("MART")) return Layers.DataMart;
+        if (db == "DWH" || db.Contains("CORE")) return Layers.Core;
         return null;
     }
 

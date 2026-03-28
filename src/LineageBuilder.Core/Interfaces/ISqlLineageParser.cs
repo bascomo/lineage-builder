@@ -52,7 +52,7 @@ public class ColumnLineageEntry
     public string TargetColumn { get; set; } = string.Empty;
 
     /// <summary>Тип связи.</summary>
-    public EdgeType EdgeType { get; set; } = EdgeType.DataFlow;
+    public string EdgeType { get; set; } = EdgeTypes.DataFlow;
 
     /// <summary>Выражение трансформации (если есть).</summary>
     public string? TransformExpression { get; set; }

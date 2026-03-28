@@ -50,7 +50,7 @@ public class ColumnLineageVisitor : TSqlFragmentVisitor
                     SourceColumn = src.ColumnName,
                     TargetTable = viewName,
                     TargetColumn = col.OutputName,
-                    EdgeType = col.IsAggregation ? EdgeType.Aggregation : EdgeType.DataFlow,
+                    EdgeType = col.IsAggregation ? EdgeTypes.Aggregation : EdgeTypes.DataFlow,
                     TransformExpression = col.TransformExpression
                 });
             }
@@ -95,7 +95,7 @@ public class ColumnLineageVisitor : TSqlFragmentVisitor
                     SourceColumn = src.ColumnName,
                     TargetTable = targetName,
                     TargetColumn = targetCol,
-                    EdgeType = col.IsAggregation ? EdgeType.Aggregation : EdgeType.DataFlow,
+                    EdgeType = col.IsAggregation ? EdgeTypes.Aggregation : EdgeTypes.DataFlow,
                     TransformExpression = col.TransformExpression
                 });
             }

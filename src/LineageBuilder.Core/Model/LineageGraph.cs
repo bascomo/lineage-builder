@@ -70,8 +70,8 @@ public class LineageGraph
     /// <summary>
     /// Добавить ребро по FQN источника и назначения.
     /// </summary>
-    public LineageEdge? AddEdge(string sourceFqn, string targetFqn, EdgeType edgeType,
-        MechanismType? mechanism = null, string? mechanismLocation = null, string? transformExpression = null)
+    public LineageEdge? AddEdge(string sourceFqn, string targetFqn, string edgeType,
+        int? mechanismNodeId = null, string? transformExpression = null)
     {
         var source = FindNode(sourceFqn);
         var target = FindNode(targetFqn);
@@ -82,8 +82,7 @@ public class LineageGraph
             SourceNodeId = source.Id,
             TargetNodeId = target.Id,
             EdgeType = edgeType,
-            MechanismType = mechanism,
-            MechanismLocation = mechanismLocation,
+            MechanismNodeId = mechanismNodeId,
             TransformExpression = transformExpression
         });
     }

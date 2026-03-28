@@ -29,10 +29,10 @@ api.MapGet("/search", async (string q, int? limit, ILineageRepository repo) =>
     return Results.Ok(nodes.Select(n => new
     {
         n.Id,
-        nodeType = n.NodeType.ToString(),
+        nodeType = n.NodeTypeName,
         n.FullyQualifiedName,
         n.DisplayName,
-        layer = n.Layer?.ToString()
+        layer = n.LayerName
     }));
 });
 
@@ -79,8 +79,8 @@ api.MapGet("/impact/{nodeId:int}", async (int nodeId, int? depth, ILineageReposi
                 {
                     id = $"n{n.Id}",
                     label = n.DisplayName,
-                    nodeType = n.NodeType.ToString(),
-                    layer = n.Layer?.ToString(),
+                    nodeType = n.NodeTypeName,
+                    layer = n.LayerName,
                     fqn = n.FullyQualifiedName,
                     sourceLocation = n.SourceLocation
                 }
@@ -92,8 +92,8 @@ api.MapGet("/impact/{nodeId:int}", async (int nodeId, int? depth, ILineageReposi
                     id = $"e{e.Id}",
                     source = $"n{e.SourceNodeId}",
                     target = $"n{e.TargetNodeId}",
-                    edgeType = e.EdgeType.ToString(),
-                    mechanism = e.MechanismType?.ToString(),
+                    edgeType = e.EdgeType,
+                    mechanismNodeId = e.MechanismNodeId,
                     transform = e.TransformExpression
                 }
             })
@@ -118,8 +118,8 @@ static object ToCytoscapeJson(LineageBuilder.Core.Model.LineageGraph graph)
                 {
                     id = $"n{n.Id}",
                     label = n.DisplayName,
-                    nodeType = n.NodeType.ToString(),
-                    layer = n.Layer?.ToString(),
+                    nodeType = n.NodeTypeName,
+                    layer = n.LayerName,
                     fqn = n.FullyQualifiedName,
                     sourceLocation = n.SourceLocation
                 }
@@ -131,8 +131,8 @@ static object ToCytoscapeJson(LineageBuilder.Core.Model.LineageGraph graph)
                     id = $"e{e.Id}",
                     source = $"n{e.SourceNodeId}",
                     target = $"n{e.TargetNodeId}",
-                    edgeType = e.EdgeType.ToString(),
-                    mechanism = e.MechanismType?.ToString(),
+                    edgeType = e.EdgeType,
+                    mechanismNodeId = e.MechanismNodeId,
                     transform = e.TransformExpression
                 }
             })

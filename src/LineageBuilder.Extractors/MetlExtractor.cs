@@ -75,10 +75,11 @@ public class MetlExtractor : IMetadataExtractor
             // Add source table node
             var sourceTableNode = graph.AddNode(new LineageNode
             {
-                NodeType = NodeType.Table,
+                NodeTypeId = WellKnownNodeTypes.Table,
+                NodeTypeName = nameof(WellKnownNodeTypes.Table),
                 FullyQualifiedName = sourceFqn,
                 DisplayName = $"{mapping.SourceDB}.{mapping.SourceSchema}.{mapping.SourceTable}",
-                Layer = LayerName.Source,
+                LayerName = Layers.Source,
                 Metadata = new Dictionary<string, string>
                 {
                     ["server"] = mapping.SourceServer,
@@ -90,16 +91,26 @@ public class MetlExtractor : IMetadataExtractor
             // Add staging table node
             var stagingTableNode = graph.AddNode(new LineageNode
             {
-                NodeType = NodeType.Table,
+                NodeTypeId = WellKnownNodeTypes.Table,
+                NodeTypeName = nameof(WellKnownNodeTypes.Table),
                 FullyQualifiedName = stagingFqn,
                 DisplayName = $"StagingArea.{mapping.SourceCode}.{mapping.SourceTable}",
-                Layer = LayerName.Staging,
+                LayerName = Layers.Staging,
                 Metadata = new Dictionary<string, string>
                 {
                     ["database"] = "StagingArea",
                     ["schema"] = mapping.SourceCode,
                     ["sourceCode"] = mapping.SourceCode
                 }
+            });
+
+            // Add mETL mapping node as mechanism
+            var metlMappingNode = graph.AddNode(new LineageNode
+            {
+                NodeTypeId = WellKnownNodeTypes.MetlMapping,
+                NodeTypeName = nameof(WellKnownNodeTypes.MetlMapping),
+                FullyQualifiedName = $"[mETL].{mapping.SourceCode}",
+                DisplayName = $"mETL:{mapping.SourceCode}"
             });
 
             // Add column-level lineage (1:1 copy)
@@ -110,29 +121,28 @@ public class MetlExtractor : IMetadataExtractor
 
                 var sourceColNode = graph.AddNode(new LineageNode
                 {
-                    NodeType = NodeType.Column,
+                    NodeTypeId = WellKnownNodeTypes.Column,
+                    NodeTypeName = nameof(WellKnownNodeTypes.Column),
                     FullyQualifiedName = sourceColFqn,
                     DisplayName = col,
-                    Layer = LayerName.Source,
-                    ParentNodeId = sourceTableNode.Id
+                    LayerName = Layers.Source
                 });
 
                 var stagingColNode = graph.AddNode(new LineageNode
                 {
-                    NodeType = NodeType.Column,
+                    NodeTypeId = WellKnownNodeTypes.Column,
+                    NodeTypeName = nameof(WellKnownNodeTypes.Column),
                     FullyQualifiedName = stagingColFqn,
                     DisplayName = col,
-                    Layer = LayerName.Staging,
-                    ParentNodeId = stagingTableNode.Id
+                    LayerName = Layers.Staging
                 });
 
                 graph.AddEdge(new LineageEdge
                 {
                     SourceNodeId = sourceColNode.Id,
                     TargetNodeId = stagingColNode.Id,
-                    EdgeType = EdgeType.DirectCopy,
-                    MechanismType = MechanismType.MetlLoader,
-                    MechanismLocation = $"mETL:{mapping.SourceCode}",
+                    EdgeType = EdgeTypes.DirectCopy,
+                    MechanismNodeId = metlMappingNode.Id,
                     TransformExpression = "1:1 copy"
                 });
             }

@@ -194,7 +194,7 @@ public class TsqlLineageParserTests
 
         Assert.False(result.HasErrors);
         Assert.Contains(result.Entries, e =>
-            e.TargetColumn == "TotalAmount" && e.EdgeType == EdgeType.Aggregation);
+            e.TargetColumn == "TotalAmount" && e.EdgeType == EdgeTypes.Aggregation);
     }
 
     // ==================== Test 10: ISNULL / COALESCE ====================

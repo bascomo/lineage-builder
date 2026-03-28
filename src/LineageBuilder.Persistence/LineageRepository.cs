@@ -69,11 +69,11 @@ public class LineageRepository : ILineageRepository
         await conn.ExecuteAsync(@"
             CREATE TABLE #TempNodes (
                 FullyQualifiedName NVARCHAR(1000),
-                NodeType VARCHAR(50),
+                NodeTypeId INT,
+                NodeTypeName VARCHAR(50),
                 DisplayName NVARCHAR(500),
                 SourceLocation NVARCHAR(1000),
                 LayerName VARCHAR(100),
-                ParentNodeId INT,
                 Metadata NVARCHAR(MAX)
             )");
 
@@ -82,15 +82,15 @@ public class LineageRepository : ILineageRepository
             foreach (var node in batch)
             {
                 await conn.ExecuteAsync(@"
-                    INSERT INTO #TempNodes VALUES (@FQN, @NodeType, @DisplayName, @SourceLocation, @Layer, @ParentNodeId, @Metadata)",
+                    INSERT INTO #TempNodes VALUES (@FQN, @NodeTypeId, @NodeTypeName, @DisplayName, @SourceLocation, @LayerName, @Metadata)",
                     new
                     {
                         FQN = node.FullyQualifiedName,
-                        NodeType = node.NodeType.ToString(),
-                        DisplayName = node.DisplayName,
-                        SourceLocation = node.SourceLocation,
-                        Layer = node.Layer?.ToString(),
-                        ParentNodeId = node.ParentNodeId,
+                        node.NodeTypeId,
+                        node.NodeTypeName,
+                        node.DisplayName,
+                        node.SourceLocation,
+                        node.LayerName,
                         Metadata = node.Metadata.Count > 0 ? JsonSerializer.Serialize(node.Metadata) : null
                     });
             }
@@ -101,7 +101,7 @@ public class LineageRepository : ILineageRepository
             USING #TempNodes AS src ON tgt.FullyQualifiedName = src.FullyQualifiedName
             WHEN MATCHED THEN
                 UPDATE SET
-                    tgt.NodeType = src.NodeType,
+                    tgt.NodeTypeId = src.NodeTypeId,
                     tgt.DisplayName = src.DisplayName,
                     tgt.SourceLocation = src.SourceLocation,
                     tgt.LayerName = src.LayerName,
@@ -110,8 +110,8 @@ public class LineageRepository : ILineageRepository
                     tgt.LastSeenRunId = {runId},
                     tgt.IsDeleted = 0
             WHEN NOT MATCHED THEN
-                INSERT (NodeType, FullyQualifiedName, DisplayName, SourceLocation, LayerName, ParentNodeId, Metadata, LastSeenRunId)
-                VALUES (src.NodeType, src.FullyQualifiedName, src.DisplayName, src.SourceLocation, src.LayerName, src.ParentNodeId, src.Metadata, {runId});
+                INSERT (NodeTypeId, FullyQualifiedName, DisplayName, SourceLocation, LayerName, Metadata, LastSeenRunId)
+                VALUES (src.NodeTypeId, src.FullyQualifiedName, src.DisplayName, src.SourceLocation, src.LayerName, src.Metadata, {runId});
 
             DROP TABLE #TempNodes;");
 
@@ -130,27 +130,25 @@ public class LineageRepository : ILineageRepository
                 await conn.ExecuteAsync($@"
                     MERGE lineage2.Edge AS tgt
                     USING (SELECT @SourceNodeId AS SourceNodeId, @TargetNodeId AS TargetNodeId,
-                                  @EdgeType AS EdgeType, @MechanismLocation AS MechanismLocation) AS src
+                                  @EdgeType AS EdgeType, @MechanismNodeId AS MechanismNodeId) AS src
                     ON tgt.SourceNodeId = src.SourceNodeId
                        AND tgt.TargetNodeId = src.TargetNodeId
                        AND tgt.EdgeType = src.EdgeType
-                       AND ISNULL(tgt.MechanismLocation, '') = ISNULL(src.MechanismLocation, '')
+                       AND ISNULL(tgt.MechanismNodeId, 0) = ISNULL(src.MechanismNodeId, 0)
                     WHEN MATCHED THEN
                         UPDATE SET
-                            tgt.MechanismType = @MechanismType,
                             tgt.TransformExpression = @TransformExpression,
                             tgt.LastSeenRunId = {runId},
                             tgt.IsDeleted = 0
                     WHEN NOT MATCHED THEN
-                        INSERT (SourceNodeId, TargetNodeId, EdgeType, MechanismType, MechanismLocation, TransformExpression, LastSeenRunId)
-                        VALUES (@SourceNodeId, @TargetNodeId, @EdgeType, @MechanismType, @MechanismLocation, @TransformExpression, {runId});",
+                        INSERT (SourceNodeId, TargetNodeId, EdgeType, MechanismNodeId, TransformExpression, LastSeenRunId)
+                        VALUES (@SourceNodeId, @TargetNodeId, @EdgeType, @MechanismNodeId, @TransformExpression, {runId});",
                     new
                     {
                         edge.SourceNodeId,
                         edge.TargetNodeId,
-                        EdgeType = edge.EdgeType.ToString(),
-                        MechanismType = edge.MechanismType?.ToString(),
-                        edge.MechanismLocation,
+                        edge.EdgeType,
+                        edge.MechanismNodeId,
                         edge.TransformExpression
                     });
             }
@@ -201,7 +199,7 @@ public class LineageRepository : ILineageRepository
                 INNER JOIN cte ON {direction}
                 WHERE e.IsDeleted = 0 AND cte.Depth < @Depth
             )
-            SELECT DISTINCT n.NodeId, n.NodeType, n.FullyQualifiedName, n.DisplayName,
+            SELECT DISTINCT n.NodeId, n.NodeTypeId, n.FullyQualifiedName, n.DisplayName,
                    n.SourceLocation, n.LayerName, n.Metadata
             FROM cte
             INNER JOIN lineage2.Node n ON n.NodeId = cte.NodeId;
@@ -215,7 +213,7 @@ public class LineageRepository : ILineageRepository
                 WHERE e.IsDeleted = 0 AND cte.Depth < @Depth
             )
             SELECT DISTINCT e.EdgeId, e.SourceNodeId, e.TargetNodeId, e.EdgeType,
-                   e.MechanismType, e.MechanismLocation, e.TransformExpression
+                   e.MechanismNodeId, e.TransformExpression
             FROM cte
             INNER JOIN lineage2.Edge e ON ({(upstream ? "e.TargetNodeId" : "e.SourceNodeId")}) = cte.NodeId
             WHERE e.IsDeleted = 0;";
@@ -230,11 +228,11 @@ public class LineageRepository : ILineageRepository
             var node = new LineageNode
             {
                 Id = (int)n.NodeId,
-                NodeType = Enum.Parse<NodeType>((string)n.NodeType),
+                NodeTypeId = (int)n.NodeTypeId,
                 FullyQualifiedName = (string)n.FullyQualifiedName,
                 DisplayName = (string)n.DisplayName,
                 SourceLocation = (string?)n.SourceLocation,
-                Layer = n.LayerName != null ? Enum.Parse<LayerName>((string)n.LayerName) : null
+                LayerName = (string?)n.LayerName
             };
             graph.AddNode(node);
         }
@@ -247,9 +245,8 @@ public class LineageRepository : ILineageRepository
                 Id = (int)e.EdgeId,
                 SourceNodeId = (int)e.SourceNodeId,
                 TargetNodeId = (int)e.TargetNodeId,
-                EdgeType = Enum.Parse<EdgeType>((string)e.EdgeType),
-                MechanismType = e.MechanismType != null ? Enum.Parse<MechanismType>((string)e.MechanismType) : null,
-                MechanismLocation = (string?)e.MechanismLocation,
+                EdgeType = (string)e.EdgeType,
+                MechanismNodeId = (int?)e.MechanismNodeId,
                 TransformExpression = (string?)e.TransformExpression
             });
         }
@@ -263,7 +260,7 @@ public class LineageRepository : ILineageRepository
         await conn.OpenAsync(ct);
 
         var results = await conn.QueryAsync<dynamic>(@"
-            SELECT TOP (@Limit) NodeId, NodeType, FullyQualifiedName, DisplayName,
+            SELECT TOP (@Limit) NodeId, NodeTypeId, FullyQualifiedName, DisplayName,
                    SourceLocation, LayerName
             FROM lineage2.Node
             WHERE IsDeleted = 0
@@ -277,11 +274,11 @@ public class LineageRepository : ILineageRepository
         return results.Select(n => new LineageNode
         {
             Id = (int)n.NodeId,
-            NodeType = Enum.Parse<NodeType>((string)n.NodeType),
+            NodeTypeId = (int)n.NodeTypeId,
             FullyQualifiedName = (string)n.FullyQualifiedName,
             DisplayName = (string)n.DisplayName,
             SourceLocation = (string?)n.SourceLocation,
-            Layer = n.LayerName != null ? Enum.Parse<LayerName>((string)n.LayerName) : null
+            LayerName = (string?)n.LayerName
         });
     }
 
@@ -291,7 +288,7 @@ public class LineageRepository : ILineageRepository
         await conn.OpenAsync(ct);
 
         var n = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-            SELECT NodeId, NodeType, FullyQualifiedName, DisplayName,
+            SELECT NodeId, NodeTypeId, FullyQualifiedName, DisplayName,
                    SourceLocation, LayerName, Metadata
             FROM lineage2.Node
             WHERE NodeId = @NodeId AND IsDeleted = 0",
@@ -302,11 +299,11 @@ public class LineageRepository : ILineageRepository
         return new LineageNode
         {
             Id = (int)n.NodeId,
-            NodeType = Enum.Parse<NodeType>((string)n.NodeType),
+            NodeTypeId = (int)n.NodeTypeId,
             FullyQualifiedName = (string)n.FullyQualifiedName,
             DisplayName = (string)n.DisplayName,
             SourceLocation = (string?)n.SourceLocation,
-            Layer = n.LayerName != null ? Enum.Parse<LayerName>((string)n.LayerName) : null,
+            LayerName = (string?)n.LayerName,
             Metadata = n.Metadata != null
                 ? JsonSerializer.Deserialize<Dictionary<string, string>>((string)n.Metadata) ?? new()
                 : new()

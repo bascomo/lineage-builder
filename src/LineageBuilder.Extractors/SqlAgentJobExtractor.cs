@@ -48,7 +48,8 @@ public class SqlAgentJobExtractor : IMetadataExtractor
 
             var jobNode = graph.AddNode(new LineageNode
             {
-                NodeType = NodeType.SqlAgentJob,
+                NodeTypeId = WellKnownNodeTypes.SqlAgentJob,
+                NodeTypeName = nameof(WellKnownNodeTypes.SqlAgentJob),
                 FullyQualifiedName = $"[SqlAgent].{serverName}.{jobName}",
                 DisplayName = jobName,
                 Metadata = new Dictionary<string, string>
@@ -77,10 +78,10 @@ public class SqlAgentJobExtractor : IMetadataExtractor
 
                 var stepNode = graph.AddNode(new LineageNode
                 {
-                    NodeType = NodeType.SqlAgentJobStep,
+                    NodeTypeId = WellKnownNodeTypes.SqlAgentJobStep,
+                    NodeTypeName = nameof(WellKnownNodeTypes.SqlAgentJobStep),
                     FullyQualifiedName = $"[SqlAgent].{serverName}.{jobName}.Step{stepId}",
                     DisplayName = $"{jobName} → {stepName}",
-                    ParentNodeId = jobNode.Id,
                     Metadata = new Dictionary<string, string>
                     {
                         ["subsystem"] = subsystem,
@@ -94,9 +95,8 @@ public class SqlAgentJobExtractor : IMetadataExtractor
                 {
                     SourceNodeId = jobNode.Id,
                     TargetNodeId = stepNode.Id,
-                    EdgeType = EdgeType.ProcessExecution,
-                    MechanismType = MechanismType.SqlAgentJob,
-                    MechanismLocation = $"[SqlAgent].{serverName}.{jobName}"
+                    EdgeType = EdgeTypes.ProcessExecution,
+                    MechanismNodeId = jobNode.Id
                 });
 
                 // Link step to target based on subsystem
@@ -125,7 +125,8 @@ public class SqlAgentJobExtractor : IMetadataExtractor
                         // Create placeholder node
                         packageNode = graph.AddNode(new LineageNode
                         {
-                            NodeType = NodeType.SsisPackage,
+                            NodeTypeId = WellKnownNodeTypes.SsisPackage,
+                            NodeTypeName = nameof(WellKnownNodeTypes.SsisPackage),
                             FullyQualifiedName = packageName,
                             DisplayName = packageName.Split('\\').Last()
                         });
@@ -134,8 +135,8 @@ public class SqlAgentJobExtractor : IMetadataExtractor
                     {
                         SourceNodeId = stepNode.Id,
                         TargetNodeId = packageNode.Id,
-                        EdgeType = EdgeType.ProcessExecution,
-                        MechanismType = MechanismType.SqlAgentJob
+                        EdgeType = EdgeTypes.ProcessExecution,
+                        MechanismNodeId = stepNode.Id
                     });
                 }
                 break;
@@ -155,7 +156,8 @@ public class SqlAgentJobExtractor : IMetadataExtractor
                     {
                         procNode = graph.AddNode(new LineageNode
                         {
-                            NodeType = NodeType.StoredProcedure,
+                            NodeTypeId = WellKnownNodeTypes.StoredProcedure,
+                            NodeTypeName = nameof(WellKnownNodeTypes.StoredProcedure),
                             FullyQualifiedName = fqn,
                             DisplayName = procName
                         });
@@ -164,9 +166,8 @@ public class SqlAgentJobExtractor : IMetadataExtractor
                     {
                         SourceNodeId = stepNode.Id,
                         TargetNodeId = procNode.Id,
-                        EdgeType = EdgeType.ProcessExecution,
-                        MechanismType = MechanismType.SqlAgentJob,
-                        MechanismLocation = stepNode.FullyQualifiedName
+                        EdgeType = EdgeTypes.ProcessExecution,
+                        MechanismNodeId = stepNode.Id
                     });
                 }
                 break;

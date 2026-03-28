@@ -1,88 +1,79 @@
 namespace LineageBuilder.Core.Model;
 
 /// <summary>
-/// Тип узла в графе lineage.
+/// Well-known Node Type IDs matching lineage_v2.NodeType table.
+/// Used in code for convenience; actual source of truth is the DB table.
 /// </summary>
-public enum NodeType
+public static class WellKnownNodeTypes
 {
-    SqlServer,
-    SsasServer,
-    DatabaseRelational,
-    DatabaseMultidimensional,
-    Schema,
-    Table,
-    View,
-    Column,
-    StoredProcedure,
-    TableFunction,
-    SqlAgentJob,
-    SqlAgentJobStep,
-    SsisPackage,
-    SsisExecutable,
-    SsisComponent,
-    SsisComponentColumn,
-    SsasCube,
-    SsasDsv,
-    SsasDsvTable,
-    SsasDsvTableField,
-    SsasDsvNamedQuery,
-    SsasDsvNamedQueryField,
-    SsasDimension,
-    SsasDimensionAttribute,
-    SsasMeasureGroup,
-    SsasMeasure,
-    MetlMapping,
-    ExternalSource,
-    FinalPoint
+    // SQL Server Platform
+    public const int SqlServerPlatform = 1;
+    public const int SqlServer = 2;
+    public const int Database = 3;
+    public const int Schema = 4;
+    public const int Table = 5;
+    public const int Column = 6;
+    public const int View = 7;
+    public const int StoredProcedure = 8;
+    public const int TableFunction = 9;
+
+    // SSAS Platform
+    public const int SsasPlatform = 10;
+    public const int SsasServer = 11;
+    public const int SsasDatabase = 12;
+    public const int Cube = 13;
+    public const int Dsv = 14;
+    public const int MeasureGroup = 15;
+    public const int Measure = 16;
+    public const int Dimension = 17;
+    public const int DimensionAttribute = 18;
+    public const int DsvTable = 19;
+    public const int DsvNamedQuery = 20;
+    public const int DsvTableField = 21;
+    public const int DsvNqField = 22;
+
+    // SSIS Platform
+    public const int SsisPlatform = 23;
+    public const int SsisProject = 24;
+    public const int SsisPackage = 25;
+    public const int SsisExecutable = 26;
+    public const int SsisComponent = 27;
+    public const int SsisComponentColumn = 28;
+
+    // SQL Agent Platform
+    public const int SqlAgentPlatform = 29;
+    public const int SqlAgentJob = 30;
+    public const int SqlAgentJobStep = 31;
+
+    // mETL Platform
+    public const int MetlPlatform = 32;
+    public const int MetlMapping = 33;
 }
 
 /// <summary>
-/// Тип связи (ребра) между узлами.
+/// Well-known Edge Types as string constants.
 /// </summary>
-public enum EdgeType
+public static class EdgeTypes
 {
-    /// <summary>Данные перетекают из source в target.</summary>
-    DataFlow,
-    /// <summary>Данные трансформируются (с выражением).</summary>
-    Transform,
-    /// <summary>Агрегация (SUM, COUNT и т.д.).</summary>
-    Aggregation,
-    /// <summary>Фильтрация (WHERE, HAVING).</summary>
-    Filter,
-    /// <summary>Участие в JOIN.</summary>
-    Join,
-    /// <summary>SSIS Lookup.</summary>
-    Lookup,
-    /// <summary>Job запускает пакет/процедуру.</summary>
-    ProcessExecution,
-    /// <summary>mETL 1:1 копирование.</summary>
-    DirectCopy
+    public const string DataFlow = "DataFlow";
+    public const string Transform = "Transform";
+    public const string Aggregation = "Aggregation";
+    public const string Filter = "Filter";
+    public const string Join = "Join";
+    public const string DirectCopy = "DirectCopy";
+    public const string ProcessExecution = "ProcessExecution";
+    public const string Lookup = "Lookup";
 }
 
 /// <summary>
-/// Механизм, осуществляющий связь.
+/// Well-known Layer Names.
 /// </summary>
-public enum MechanismType
+public static class Layers
 {
-    View,
-    StoredProcedure,
-    TableFunction,
-    SsisDataFlow,
-    SsisExecuteSql,
-    SsasDsv,
-    SqlAgentJob,
-    MetlLoader
-}
-
-/// <summary>
-/// Слой DWH, к которому принадлежит узел.
-/// </summary>
-public enum LayerName
-{
-    Source,
-    Staging,
-    Core,
-    DataMart,
-    Cube,
-    Report
+    public const string Source = "Source";
+    public const string Staging = "Staging";
+    public const string Core = "Core";
+    public const string DataMart = "DataMart";
+    public const string Cube = "Cube";
+    public const string Report = "Report";
 }
