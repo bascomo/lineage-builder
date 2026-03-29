@@ -35,3 +35,12 @@ x86/
 [Bb]uild[Rr]esults/
 TestResults/
 tools/OlapProxy/publish/
+test_*.py
+test_*.sql
+test_*.json
+tools/OlapProxy/publish-sc/
+tools/OlapProxy/*.zip
+tools/OlapWorker/publish/
+tools/OlapWorker/*.zip
+wiki_*.py
+tools/nq_batch.json
