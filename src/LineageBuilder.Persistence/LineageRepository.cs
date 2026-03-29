@@ -26,7 +26,7 @@ public class LineageRepository : ILineageRepository
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         var runId = await conn.ExecuteScalarAsync<int>(
-            "INSERT INTO lineage2.Run (StartedAt, Status) OUTPUT INSERTED.RunId VALUES (SYSUTCDATETIME(), 'Running')");
+            "INSERT INTO lineage_v2.Run (StartedAt, Status) OUTPUT INSERTED.RunId VALUES (SYSUTCDATETIME(), 'Running')");
         _logger?.LogInformation("Started lineage run {RunId}", runId);
         return runId;
     }
@@ -37,7 +37,7 @@ public class LineageRepository : ILineageRepository
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await conn.ExecuteAsync(@"
-            UPDATE lineage2.Run
+            UPDATE lineage_v2.Run
             SET CompletedAt = SYSUTCDATETIME(), Status = 'Completed',
                 NodesCreated = @NodesCreated, NodesUpdated = @NodesUpdated,
                 EdgesCreated = @EdgesCreated, EdgesUpdated = @EdgesUpdated
@@ -53,7 +53,7 @@ public class LineageRepository : ILineageRepository
         await using var conn = new SqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await conn.ExecuteAsync(@"
-            UPDATE lineage2.Run
+            UPDATE lineage_v2.Run
             SET CompletedAt = SYSUTCDATETIME(), Status = 'Failed', ErrorLog = @Error
             WHERE RunId = @RunId",
             new { RunId = runId, Error = error });
@@ -97,7 +97,7 @@ public class LineageRepository : ILineageRepository
         }
 
         var affected = await conn.ExecuteAsync($@"
-            MERGE lineage2.Node AS tgt
+            MERGE lineage_v2.Node AS tgt
             USING #TempNodes AS src ON tgt.FullyQualifiedName = src.FullyQualifiedName
             WHEN MATCHED THEN
                 UPDATE SET
@@ -128,7 +128,7 @@ public class LineageRepository : ILineageRepository
             foreach (var edge in batch)
             {
                 await conn.ExecuteAsync($@"
-                    MERGE lineage2.Edge AS tgt
+                    MERGE lineage_v2.Edge AS tgt
                     USING (SELECT @SourceNodeId AS SourceNodeId, @TargetNodeId AS TargetNodeId,
                                   @EdgeType AS EdgeType, @MechanismNodeId AS MechanismNodeId) AS src
                     ON tgt.SourceNodeId = src.SourceNodeId
@@ -161,10 +161,10 @@ public class LineageRepository : ILineageRepository
         await conn.OpenAsync(ct);
 
         var nodesDeleted = await conn.ExecuteAsync(
-            "UPDATE lineage2.Node SET IsDeleted = 1 WHERE LastSeenRunId < @RunId AND IsDeleted = 0",
+            "UPDATE lineage_v2.Node SET IsDeleted = 1 WHERE LastSeenRunId < @RunId AND IsDeleted = 0",
             new { RunId = runId });
         var edgesDeleted = await conn.ExecuteAsync(
-            "UPDATE lineage2.Edge SET IsDeleted = 1 WHERE LastSeenRunId < @RunId AND IsDeleted = 0",
+            "UPDATE lineage_v2.Edge SET IsDeleted = 1 WHERE LastSeenRunId < @RunId AND IsDeleted = 0",
             new { RunId = runId });
 
         _logger?.LogInformation("Marked deleted: {Nodes} nodes, {Edges} edges", nodesDeleted, edgesDeleted);
@@ -192,30 +192,30 @@ public class LineageRepository : ILineageRepository
 
         var sql = $@"
             ;WITH cte AS (
-                SELECT NodeId, 0 AS Depth FROM lineage2.Node WHERE NodeId = @NodeId AND IsDeleted = 0
+                SELECT NodeId, 0 AS Depth FROM lineage_v2.Node WHERE NodeId = @NodeId AND IsDeleted = 0
                 UNION ALL
                 SELECT {nextNode}, cte.Depth + 1
-                FROM lineage2.Edge e
+                FROM lineage_v2.Edge e
                 INNER JOIN cte ON {direction}
                 WHERE e.IsDeleted = 0 AND cte.Depth < @Depth
             )
             SELECT DISTINCT n.NodeId, n.NodeTypeId, n.FullyQualifiedName, n.DisplayName,
                    n.SourceLocation, n.LayerName, n.Metadata
             FROM cte
-            INNER JOIN lineage2.Node n ON n.NodeId = cte.NodeId;
+            INNER JOIN lineage_v2.Node n ON n.NodeId = cte.NodeId;
 
             ;WITH cte AS (
-                SELECT NodeId, 0 AS Depth FROM lineage2.Node WHERE NodeId = @NodeId AND IsDeleted = 0
+                SELECT NodeId, 0 AS Depth FROM lineage_v2.Node WHERE NodeId = @NodeId AND IsDeleted = 0
                 UNION ALL
                 SELECT {nextNode}, cte.Depth + 1
-                FROM lineage2.Edge e
+                FROM lineage_v2.Edge e
                 INNER JOIN cte ON {direction}
                 WHERE e.IsDeleted = 0 AND cte.Depth < @Depth
             )
             SELECT DISTINCT e.EdgeId, e.SourceNodeId, e.TargetNodeId, e.EdgeType,
                    e.MechanismNodeId, e.TransformExpression
             FROM cte
-            INNER JOIN lineage2.Edge e ON ({(upstream ? "e.TargetNodeId" : "e.SourceNodeId")}) = cte.NodeId
+            INNER JOIN lineage_v2.Edge e ON ({(upstream ? "e.TargetNodeId" : "e.SourceNodeId")}) = cte.NodeId
             WHERE e.IsDeleted = 0;";
 
         var graph = new LineageGraph();
@@ -262,7 +262,7 @@ public class LineageRepository : ILineageRepository
         var results = await conn.QueryAsync<dynamic>(@"
             SELECT TOP (@Limit) NodeId, NodeTypeId, FullyQualifiedName, DisplayName,
                    SourceLocation, LayerName
-            FROM lineage2.Node
+            FROM lineage_v2.Node
             WHERE IsDeleted = 0
               AND (FullyQualifiedName LIKE '%' + @Query + '%'
                    OR DisplayName LIKE '%' + @Query + '%')
@@ -290,7 +290,7 @@ public class LineageRepository : ILineageRepository
         var n = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
             SELECT NodeId, NodeTypeId, FullyQualifiedName, DisplayName,
                    SourceLocation, LayerName, Metadata
-            FROM lineage2.Node
+            FROM lineage_v2.Node
             WHERE NodeId = @NodeId AND IsDeleted = 0",
             new { NodeId = nodeId });
 

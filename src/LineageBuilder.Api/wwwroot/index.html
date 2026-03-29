@@ -62,9 +62,9 @@
         <div class="search-results" id="searchResults"></div>
 
         <div class="controls">
-            <button class="btn active" id="btnUpstream" onclick="setDirection('upstream')">Upstream</button>
+            <button class="btn" id="btnUpstream" onclick="setDirection('upstream')">Upstream</button>
             <button class="btn" id="btnDownstream" onclick="setDirection('downstream')">Downstream</button>
-            <button class="btn" id="btnImpact" onclick="setDirection('impact')">Impact</button>
+            <button class="btn active" id="btnImpact" onclick="setDirection('impact')">Impact</button>
         </div>
 
         <label style="font-size:12px;">
@@ -95,7 +95,7 @@
 
     <script>
         const API = '/api/lineage';
-        let cy, direction = 'upstream', selectedNodeId = null;
+        let cy, direction = 'impact', selectedNodeId = null;
 
         // Color mapping
         const layerColors = {
